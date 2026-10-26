@@ -1,6 +1,8 @@
 import requests
 import os
+import sys
 from dotenv import load_dotenv
+
 
 load_dotenv()   # reads .env and loads its variables
 
@@ -9,10 +11,11 @@ def list_containers(url, session):
     try:
         response = session.get(f"{url}/containers/json?all=true", timeout=10)
         response.raise_for_status()
-        return response.json()
+    except requests.ConnectionError:
+        sys.exit("Impossible de joindre le service. Est-il démarré ?")
     except requests.exceptions.RequestException as e:
-        print(f"Une erreur est survenue : {e}")
-        return []
+        sys.exit(f"Erreur lors de la récupération des conteneurs : {e}")
+    return response.json()
 
 def get_stats(url, session, container_id):
     try:
@@ -20,6 +23,10 @@ def get_stats(url, session, container_id):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
+        if isinstance(e, requests.exceptions.HTTPError):
+            print(f"Erreur HTTP : {e.response.status_code} - {e.response.reason}")
+        if isinstance(e, requests.exceptions.ConnectionError):
+            print(f"Erreur de connexion : {e}")
         print(f"Erreur lors de la récupération des infos du conteneur : {e}")
         return None
 
@@ -36,23 +43,44 @@ def get_cpu_usage(stats):
     return usage
 
 def get_memory_usage(stats):
-    todo
+    # Docker donne la mémoire utilisée en octets, on convertit en Mo en divisant par un octet deux fois (1024).
+    memory_stats = stats.get("memory_stats", {})
+    memory_usage = memory_stats.get("usage", 0)
+    usage = memory_usage / 1024 / 1024 
+    return usage
 
 if __name__ == "__main__":
     url = os.environ.get("DOCKER_API_URL", "http://127.0.0.1:2375")
     docker_session = requests.Session()
     containers = list_containers(url, docker_session)
+    inventaire = []
     if containers:
         print("Conteneurs disponibles :")
         for container in containers:
-            id = container.get("Id", "Unknown")
+            container_id = container.get("Id", "Unknown")
             nom = container.get("Names", ["/Unknown"])[0][1:]
+            image = container.get("Image", "Unknown")
             state = container.get("State", "Unknown")
+            print(f"Conteneur : {nom}, Image : {image}, state : {state}")
+            conteneur_info = {
+                "id": container_id,
+                "nom": nom,
+                "image": image,
+                "state": state
+            }
+
             if state == "running":
-                print(f"Le conteneur {nom} est en cours d'exécution.")
-                stats = get_stats(url, docker_session, id)
-                print(f"Stats du conteneur {nom} : {stats}")
+                stats = get_stats(url, docker_session, container_id)
+                if stats is None:
+                    print(f"Impossible de récupérer les statistiques pour le conteneur {nom}.")
+                    continue
                 cpu_usage = get_cpu_usage(stats)
-                print(f"Utilisation CPU du conteneur {nom} : {cpu_usage:.2f}%")
+                memory_usage = get_memory_usage(stats)
+                print(f"- Utilisation CPU du conteneur {nom} : {cpu_usage:.2f}%")
+                print(f"- Utilisation mémoire du conteneur {nom} : {memory_usage:.2f} Mo")
+                conteneur_info["cpu_usage"] = cpu_usage
+                conteneur_info["memory_usage"] = memory_usage
+            
+            inventaire.append(conteneur_info)
     else:
         print("Aucun conteneur.")
