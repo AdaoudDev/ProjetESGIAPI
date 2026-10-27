@@ -1,6 +1,8 @@
 import requests
 import os
 import sys
+import json
+from datetime import datetime
 from dotenv import load_dotenv
 
 
@@ -73,6 +75,7 @@ if __name__ == "__main__":
                 stats = get_stats(url, docker_session, container_id)
                 if stats is None:
                     print(f"Impossible de récupérer les statistiques pour le conteneur {nom}.")
+                    inventaire.append(conteneur_info)
                     continue
                 cpu_usage = get_cpu_usage(stats)
                 memory_usage = get_memory_usage(stats)
@@ -82,5 +85,6 @@ if __name__ == "__main__":
                 conteneur_info["memory_usage"] = memory_usage
             
             inventaire.append(conteneur_info)
+        json.dump([datetime.now().isoformat()] + inventaire, open("inventaire.json", "w"), indent=4)
     else:
         print("Aucun conteneur.")
