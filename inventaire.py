@@ -68,19 +68,34 @@ def get_netbox_version(url, session, token=None):
         print(f"Erreur lors de la récupération de la version de NetBox : {e}")
         return "Unknown"
 
-def get_netbox_objet_types(url, session, result=[],offset=0,token=None, limit=50):
+def get_netbox_object_types(url, session, result=[],token=None, limit=50, next_url=None):
     add_netbox_token(session, token)
     try:
-        response = session.get(f"{url}/api/core/object-types/?limit={limit}&offset={offset}", timeout=10)
+        if next_url:
+            request_url = next_url
+        else :
+            request_url = f"{url}/api/core/object-types/?limit={limit}"
+        response = session.get(request_url, timeout=10)
         response.raise_for_status()
         request_result = response.json().get("results", [])
-        if not request_result or request_result == []:
-            # Nous avons atteint la fin des résultats
-            return result
-        return get_netbox_objet_types(url, session, result + request_result, offset + limit, token)
+        next = response.json().get("next", None)
+        result.extend(request_result)
+        if next:
+            return get_netbox_object_types(url, session, result=result, token=token, limit=limit, next_url=next)
+        return result
     except requests.exceptions.RequestException as e:
         print(f"Erreur lors de la récupération des types d'objets NetBox : {e}")
-        return []
+        return None
+def get_netbox_object_type_count(url, session, token=None):
+    add_netbox_token(session, token)
+    try:
+        response = session.get(f"{url}/api/core/object-types/?limit=1", timeout=10)
+        response.raise_for_status()
+        return response.json().get("count", 0)
+    except requests.exceptions.RequestException as e:
+        print(f"Erreur lors de la récupération du nombre de types d'objets NetBox : {e}")
+        return None
+
 
 if __name__ == "__main__":
     url = os.environ.get("DOCKER_API_URL", "http://127.0.0.1:2375")
@@ -131,8 +146,30 @@ if __name__ == "__main__":
     else:
         print("Aucun conteneur.")
     date =datetime.now().isoformat()
+    
+    
+    
+    print("\nRécupération des informations de NetBox...")
+
+    netbox_version = get_netbox_version(netbox_url, docker_session, netbox_token)
+    netbox_object_types_count = get_netbox_object_type_count(netbox_url, docker_session, netbox_token)
+    netbox_object_types = get_netbox_object_types(netbox_url, docker_session, token=netbox_token)
+    
+    if netbox_version in ["Unknown", None]:
+        print("Impossible de récupérer la version de NetBox.")
+    else:     
+        print(f"Version de NetBox : {netbox_version}")
+    
+    if netbox_object_types is None:
+        print("Impossible de récupérer les types d'objets NetBox.")
+    elif netbox_object_types_count is None:
+        print("Impossible de récupérer le nombre de types d'objets NetBox.")
+    elif netbox_object_types_count != len(netbox_object_types):
+        print("Incohérence dans le nombre de types d'objets NetBox.")
+    else:
+        print(f"Types d'objets NetBox calculé et count sont les mêmes : {netbox_object_types_count}")
+
+
     with open("inventaire.json", "w") as f:
-        json.dump({"date": date, "containers": inventaire}, f, indent=4)
-        print("Lecture des conteneurs terminée. Résultats sauvegardés dans inventaire.json.")
-    print(f"Version de NetBox : {get_netbox_version(netbox_url, docker_session, netbox_token)}")
-    print(f"Types d'objets NetBox : {len(get_netbox_objet_types(netbox_url, docker_session, token=netbox_token))}")
+        json.dump({"date": date, "containers": inventaire, "netbox": {"version": netbox_version, "object_types": netbox_object_types, "object_types_count": netbox_object_types_count}}, f, indent=4)
+        print("\nLecture des conteneurs terminée et NetBox ajoutés. Résultats sauvegardés dans inventaire.json.")
