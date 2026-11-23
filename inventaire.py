@@ -57,13 +57,12 @@ if __name__ == "__main__":
     containers = list_containers(url, docker_session)
     inventaire = []
     if containers:
-        print("Conteneurs disponibles :")
+        print("Recherche des conteneurs...")
         for container in containers:
             container_id = container.get("Id", "Unknown")
             nom = container.get("Names", ["/Unknown"])[0][1:]
             image = container.get("Image", "Unknown")
             state = container.get("State", "Unknown")
-            print(f"Conteneur : {nom}, Image : {image}, state : {state}")
             conteneur_info = {
                 "id": container_id,
                 "nom": nom,
@@ -79,12 +78,24 @@ if __name__ == "__main__":
                     continue
                 cpu_usage = get_cpu_usage(stats)
                 memory_usage = get_memory_usage(stats)
-                print(f"- Utilisation CPU du conteneur {nom} : {cpu_usage:.2f}%")
-                print(f"- Utilisation mémoire du conteneur {nom} : {memory_usage:.2f} Mo")
                 conteneur_info["cpu_usage"] = cpu_usage
                 conteneur_info["memory_usage"] = memory_usage
             
             inventaire.append(conteneur_info)
         json.dump([datetime.now().isoformat()] + inventaire, open("inventaire.json", "w"), indent=4)
+        running_containers = [c for c in inventaire if c.get("state") == "running"]
+        if running_containers == 0:
+            print("Aucun conteneur en cours d'exécution. Impossible de calculer les moyennes CPU et mémoire.")
+        else:
+            print("Lecture des conteneurs terminée. Résultats sauvegardés dans inventaire.json.")
+            print("Conteneurs : " + len(containers).__str__())
+            print("Conteneurs en cours d'exécution : " + len([c for c in inventaire if c.get("state") == "running"]).__str__())
+            print("Conteneurs arrêtés : " + len([c for c in inventaire if c.get("state") == "exited"]).__str__())
+            print("Conteneurs en pause : " + len([c for c in inventaire if c.get("state") == "paused"]).__str__())
+            print("Conteneurs en redémarrage : " + len([c for c in inventaire if c.get("state") == "restarting"]).__str__())
+            average_cpu = sum(c.get("cpu_usage", 0) for c in running_containers) / len(running_containers)
+            average_memory = sum(c.get("memory_usage", 0) for c in running_containers) / len(running_containers)
+            print(f"Utilisation CPU moyenne : {average_cpu:.2f} %")
+            print(f"Utilisation mémoire moyenne : {average_memory:.0f} Mo")
     else:
         print("Aucun conteneur.")
