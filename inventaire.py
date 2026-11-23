@@ -82,24 +82,23 @@ if __name__ == "__main__":
                 conteneur_info["memory_usage"] = memory_usage
             
             inventaire.append(conteneur_info)
-        date =datetime.now().isoformat()
-        print("Lecture des conteneurs terminée. Résultats sauvegardés dans inventaire.json.")
-
         running_containers = [c for c in inventaire if c.get("state") == "running"]
-        if len(running_containers) == 0:
-            print("Aucun conteneur en cours d'exécution. Impossible de calculer les moyennes CPU et mémoire.")
+        print(f"Conteneurs : {len(containers)}")
+        print(f"Conteneurs en cours d'exécution : {len(running_containers)}")
+        print(f"Conteneurs arrêtés : {len([c for c in inventaire if c.get("state") == "exited"])}")
+        print(f"Conteneurs en pause : {len([c for c in inventaire if c.get("state") == "paused"])}")
+        print(f"Conteneurs en redémarrage : {len([c for c in inventaire if c.get("state") == "restarting"])}")
+        if len(running_containers) > 0:
+            average_cpu = sum(c.get("cpu_usage", 0) for c in running_containers) / len(running_containers)
+            average_memory = sum(c.get("memory_usage", 0) for c in running_containers) / len(running_containers)
+            print(f"Utilisation CPU moyenne : {average_cpu:.2f} %")
+            print(f"Utilisation mémoire moyenne : {average_memory:.0f} Mo")
         else:
-            print(f"Conteneurs : {len(containers)}")
-            print(f"Conteneurs en cours d'exécution : {len(running_containers)}")
-            print(f"Conteneurs arrêtés : {len([c for c in inventaire if c.get("state") == "exited"])}")
-            print(f"Conteneurs en pause : {len([c for c in inventaire if c.get("state") == "paused"])}")
-            print(f"Conteneurs en redémarrage : {len([c for c in inventaire if c.get("state") == "restarting"])}")
-            if len(running_containers) > 0:
-                average_cpu = sum(c.get("cpu_usage", 0) for c in running_containers) / len(running_containers)
-                average_memory = sum(c.get("memory_usage", 0) for c in running_containers) / len(running_containers)
-                print(f"Utilisation CPU moyenne : {average_cpu:.2f} %")
-                print(f"Utilisation mémoire moyenne : {average_memory:.0f} Mo")
+            print("Aucun conteneur en cours d'exécution. Impossible de calculer les moyennes CPU et mémoire.")
     else:
         print("Aucun conteneur.")
+    date =datetime.now().isoformat()
+    
     with open("inventaire.json", "w") as f:
         json.dump({"date": date, "containers": inventaire}, f, indent=4)
+        print("Lecture des conteneurs terminée. Résultats sauvegardés dans inventaire.json.")
