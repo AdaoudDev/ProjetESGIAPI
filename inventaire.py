@@ -83,8 +83,6 @@ if __name__ == "__main__":
             
             inventaire.append(conteneur_info)
         date =datetime.now().isoformat()
-        with open("inventaire.json", "w") as f:
-            json.dump({"date": date, "containers": inventaire}, f, indent=4)
         print("Lecture des conteneurs terminée. Résultats sauvegardés dans inventaire.json.")
 
         running_containers = [c for c in inventaire if c.get("state") == "running"]
@@ -102,5 +100,5 @@ if __name__ == "__main__":
             print(f"Utilisation mémoire moyenne : {average_memory:.0f} Mo")
     else:
         print("Aucun conteneur.")
-        with open("inventaire.json", "w") as f:
-            json.dump({"date": datetime.now().isoformat(), "containers": []}, f, indent=4)
+    with open("inventaire.json", "w") as f:
+        json.dump({"date": date, "containers": inventaire}, f, indent=4)
