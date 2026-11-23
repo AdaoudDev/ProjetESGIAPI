@@ -51,9 +51,42 @@ def get_memory_usage(stats):
     usage = memory_usage / 1024 / 1024 
     return usage
 
+def add_netbox_token(session, token):
+    if not token:
+        token = os.environ.get("NETBOX_TOKEN")
+        if not token:
+            sys.exit("Le token NetBox n'est pas défini. Veuillez définir la variable d'environnement NETBOX_TOKEN.")
+    session.headers.update({"Authorization": f"Token {token}"})
+
+def get_netbox_version(url, session, token=None):
+    add_netbox_token(session, token)
+    try:
+        response = session.get(f"{url}/api/status/", timeout=10)
+        response.raise_for_status()
+        return response.json().get("netbox-version", "Unknown")
+    except requests.exceptions.RequestException as e:
+        print(f"Erreur lors de la récupération de la version de NetBox : {e}")
+        return "Unknown"
+
+def get_netbox_objet_types(url, session, result=[],offset=0,token=None, limit=50):
+    add_netbox_token(session, token)
+    try:
+        response = session.get(f"{url}/api/core/object-types/?limit={limit}&offset={offset}", timeout=10)
+        response.raise_for_status()
+        request_result = response.json().get("results", [])
+        if not request_result or request_result == []:
+            # Nous avons atteint la fin des résultats
+            return result
+        return get_netbox_objet_types(url, session, result + request_result, offset + limit, token)
+    except requests.exceptions.RequestException as e:
+        print(f"Erreur lors de la récupération des types d'objets NetBox : {e}")
+        return []
+
 if __name__ == "__main__":
     url = os.environ.get("DOCKER_API_URL", "http://127.0.0.1:2375")
     docker_session = requests.Session()
+    netbox_token = os.environ.get("NETBOX_TOKEN")
+    netbox_url = os.environ.get("NETBOX_URL", "http://127.0.0.1:8080")
     containers = list_containers(url, docker_session)
     inventaire = []
     if containers:
@@ -98,7 +131,8 @@ if __name__ == "__main__":
     else:
         print("Aucun conteneur.")
     date =datetime.now().isoformat()
-    
     with open("inventaire.json", "w") as f:
         json.dump({"date": date, "containers": inventaire}, f, indent=4)
         print("Lecture des conteneurs terminée. Résultats sauvegardés dans inventaire.json.")
+    print(f"Version de NetBox : {get_netbox_version(netbox_url, docker_session, netbox_token)}")
+    print(f"Types d'objets NetBox : {len(get_netbox_objet_types(netbox_url, docker_session, token=netbox_token))}")
